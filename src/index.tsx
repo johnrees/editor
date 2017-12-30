@@ -1,9 +1,10 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
+import Scene from "./scene";
 
 class App extends React.Component {
   render() {
-    return <h1>something</h1>;
+    return <Scene width={600} height={600} bgColor={0x333333} />;
   }
 }
 
