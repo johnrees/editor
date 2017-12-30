@@ -33,7 +33,7 @@ export default class Scene extends React.Component<IProps> {
 
   handleMouseDown(event) {
     this.model.rotation.y += 1;
-    this.render3D();
+    requestAnimationFrame(this.render3D);
   }
 
   render3D() {
@@ -41,10 +41,11 @@ export default class Scene extends React.Component<IProps> {
   }
 
   componentDidMount() {
-    (this.refs.scene as HTMLDivElement).appendChild(this.renderer.domElement);
-    this.render3D();
+    const el = this.refs.scene as HTMLDivElement;
+    el.appendChild(this.renderer.domElement);
 
-    Rx.Observable.fromEvent(this.refs.scene as HTMLDivElement, "mousemove")
+    // return a 1 or 0 depending on if hovering over building
+    Rx.Observable.fromEvent(el, "mousemove")
       .throttleTime(50)
       .map(({ clientX, clientY }) =>
         getPosition(clientX, clientY, this.props.width, this.props.height)
@@ -55,6 +56,14 @@ export default class Scene extends React.Component<IProps> {
       })
       .distinctUntilChanged()
       .subscribe(console.log);
+
+    // return mousewheel delta
+    Rx.Observable.fromEvent(el, "mousewheel")
+      .throttleTime(20)
+      .pluck("deltaY")
+      .subscribe(console.log);
+
+    requestAnimationFrame(this.render3D);
   }
 
   render() {
