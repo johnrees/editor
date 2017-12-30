@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import * as React from "react";
 import camera from "./camera";
+import model from "./model";
 // import * as Rx from "rxjs/Rx";
 
 interface IProps {
@@ -13,7 +14,7 @@ export default class Scene extends React.Component<IProps> {
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
-  private box;
+  private model;
 
   constructor(props) {
     super(props);
@@ -24,16 +25,13 @@ export default class Scene extends React.Component<IProps> {
     this.renderer.setSize(width, height);
     this.scene = new THREE.Scene();
 
-    this.box = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 2, 2),
-      new THREE.MeshNormalMaterial()
-    );
+    this.model = model([[-1, 0], [-1, 1], [0, 2], [1, 1], [1, 0]]);
 
-    this.scene.add(this.box);
+    this.scene.add(this.model);
   }
 
   handleMouseDown(event) {
-    this.box.rotation.y += 1;
+    this.model.rotation.y += 1;
     this.render3D();
   }
 
