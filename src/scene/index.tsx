@@ -3,15 +3,7 @@ import * as React from "react";
 import camera from "./camera";
 import model from "./model";
 import * as Rx from "rxjs/Rx";
-
-function getPosition(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): [number, number] {
-  return [x / width * 2 - 1, -(y / height) * 2 + 1];
-}
+import { getPosition } from "./utils";
 
 interface IProps {
   width: number;
@@ -44,22 +36,6 @@ export default class Scene extends React.Component<IProps> {
     this.render3D();
   }
 
-  // handleMouseMove(event: React.MouseEvent<HTMLDivElement>) {
-  //   const [x, y] = getPosition(
-  //     event.clientX,
-  //     event.clientY,
-  //     this.props.width,
-  //     this.props.height
-  //   );
-  //   this.raycaster.setFromCamera({ x, y }, this.camera);
-  //   const intersects = this.raycaster.intersectObject(this.model);
-  //   if (intersects.length > 0) {
-  //     console.log("over");
-  //   } else {
-  //     console.log("off");
-  //   }
-  // }
-
   render3D() {
     this.renderer.render(this.scene, this.camera);
   }
@@ -87,7 +63,6 @@ export default class Scene extends React.Component<IProps> {
         ref="scene"
         id="scene"
         onMouseDown={this.handleMouseDown.bind(this)}
-        // onMouseMove={this.handleMouseMove.bind(this)}
       />
     );
   }
