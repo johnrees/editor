@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 const material = new THREE.MeshNormalMaterial();
 const extrudeSettings = {
-  amount: 0.1,
+  amount: 6,
   bevelEnabled: false,
   step: 1
 };
