@@ -33,7 +33,7 @@ export default class Scene extends React.Component<IProps> {
 
   handleMouseDown(event) {
     this.model.rotation.y += 1;
-    requestAnimationFrame(this.render3D);
+    requestAnimationFrame(this.render3D.bind(this));
   }
 
   render3D() {
@@ -63,7 +63,7 @@ export default class Scene extends React.Component<IProps> {
       .pluck("deltaY")
       .subscribe(console.log);
 
-    requestAnimationFrame(this.render3D);
+    requestAnimationFrame(this.render3D.bind(this));
   }
 
   render() {
