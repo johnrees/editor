@@ -72,6 +72,7 @@ export default class Scene extends React.Component<IProps> {
 
     const activeFaces$ = intersections$
       .map((intersection: THREE.Intersection) => {
+        // console.log(intersection.point);
         return (this.model.geometry as THREE.Geometry).faces.filter(face =>
           nearlyEqual(face.normal, intersection.face.normal)
         );
@@ -96,21 +97,28 @@ export default class Scene extends React.Component<IProps> {
         faceOutline.geometry = new THREE.Geometry();
         faceOutline.geometry.vertices = vertices;
         faceOutline.geometry.mergeVertices();
-        return faceOutline.geometry.vertices;
+        return {
+          normal: faces[0].normal.clone().normalize(),
+          vertices: faceOutline.geometry.vertices
+        };
       })
       .share();
 
     // prettier-ignore
     activeVertices$
       // .do(console.log)
-      .subscribe(() => {
+      .subscribe(_ => {
+        console.log('rendering')
         requestAnimationFrame(this.render3D);
       });
 
-    activeVertices$.sample(click$).subscribe(vertices => {
-      console.log("EXTRUDE");
-      vertices.forEach(v => v.addScalar(0.1));
-      const geometry = this.model.geometry as THREE.Geometry;
+    activeVertices$.sample(click$).subscribe(({ normal, vertices }) => {
+      console.log("EXTRUDE", vertices);
+      vertices.forEach(v => {
+        console.log(v);
+        v.add(normal);
+      });
+      const { geometry } = this.model;
       geometry.verticesNeedUpdate = true;
       geometry.computeBoundingSphere();
       geometry.computeBoundingBox();

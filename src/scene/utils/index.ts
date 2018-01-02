@@ -26,5 +26,5 @@ export function nearlyEqual(
 }
 
 export function flatten(arr) {
-  return Array.prototype.concat(...arr);
+  return arr.reduce((acc, arr) => [...acc, ...arr], []);
 }
