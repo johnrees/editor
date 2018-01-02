@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import * as React from "react";
-import camera from "./camera";
-import model from "./model";
+import camera from "./components/camera";
+import model from "./components/model";
 import * as Rx from "rxjs/Rx";
 import { getPosition } from "./utils";
 
