@@ -7,7 +7,7 @@ const extrudeSettings = {
   step: 1
 };
 
-const model = edges => {
+const model = (edges: number[][]): THREE.Mesh => {
   const shape = new THREE.Shape();
   edges.forEach(([x, y], index) => {
     if (index === 0) shape.moveTo(x, y);

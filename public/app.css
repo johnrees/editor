@@ -2,6 +2,9 @@
   margin: 0;
   padding: 0;
 }
+body {
+  background: black;
+}
 #editor {
   border: 1px solid black;
 }

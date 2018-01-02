@@ -2,6 +2,7 @@ import * as THREE from "three";
 import * as React from "react";
 import camera from "./components/camera";
 import model from "./components/model";
+import renderer from "./components/renderer";
 import * as Rx from "rxjs/Rx";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 
@@ -22,21 +23,12 @@ export default class Scene extends React.Component<IProps> {
     super(props);
     const { width, height, bgColor } = props;
     this.camera = camera(width, height);
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setClearColor(bgColor);
-    this.renderer.setSize(width, height);
-
+    this.renderer = renderer(width, height, bgColor);
     this.model = model([[-2, 0], [-2, 2.5], [0, 3.6], [2, 2.5], [2, 0]]);
 
     this.scene.add(this.model);
 
     this.render3D = this.render3D.bind(this);
-    this.handleMouseDown = this.handleMouseDown.bind(this);
-  }
-
-  handleMouseDown(event) {
-    this.model.rotation.y += 1;
-    requestAnimationFrame(this.render3D);
   }
 
   render3D() {
@@ -46,15 +38,16 @@ export default class Scene extends React.Component<IProps> {
 
   componentDidMount() {
     const { domElement } = this.renderer;
-
     const el = this.refs.scene as HTMLDivElement;
     el.appendChild(domElement);
 
-    const line = new THREE.Line(
+    const faceOutline = new THREE.Line(
       new THREE.Geometry(),
       new THREE.LineBasicMaterial({ color: 0xffffff })
     );
-    this.scene.add(line);
+    this.scene.add(faceOutline);
+
+    // add event listeners
 
     const click$ = Rx.Observable.fromEvent(domElement, "click");
 
@@ -68,14 +61,16 @@ export default class Scene extends React.Component<IProps> {
       passive: true
     });
 
-    const intersects$ = mouseMove$
+    // connect streams
+
+    const intersections$ = mouseMove$
       .flatMap(([x, y]) => {
         this.raycaster.setFromCamera({ x, y }, this.camera);
         return this.raycaster.intersectObject(this.model);
       })
       .share();
 
-    const activeFaces$ = intersects$
+    const activeFaces$ = intersections$
       .map((intersection: THREE.Intersection) => {
         return (this.model.geometry as THREE.Geometry).faces.filter(face =>
           nearlyEqual(face.normal, intersection.face.normal)
@@ -97,11 +92,11 @@ export default class Scene extends React.Component<IProps> {
             ];
           })
         );
-        line.geometry.dispose();
-        line.geometry = new THREE.Geometry();
-        line.geometry.vertices = vertices;
-        line.geometry.mergeVertices();
-        return line.geometry.vertices;
+        faceOutline.geometry.dispose();
+        faceOutline.geometry = new THREE.Geometry();
+        faceOutline.geometry.vertices = vertices;
+        faceOutline.geometry.mergeVertices();
+        return faceOutline.geometry.vertices;
       })
       .share();
 
