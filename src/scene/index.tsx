@@ -3,7 +3,7 @@ import * as React from "react";
 import camera from "./components/camera";
 import model from "./components/model";
 import * as Rx from "rxjs/Rx";
-import { getPosition } from "./utils";
+import { getPosition, nearlyEqual, flatten } from "./utils";
 
 interface IProps {
   width: number;
@@ -50,6 +50,14 @@ export default class Scene extends React.Component<IProps> {
     const el = this.refs.scene as HTMLDivElement;
     el.appendChild(domElement);
 
+    const line = new THREE.Line(
+      new THREE.Geometry(),
+      new THREE.LineBasicMaterial({ color: 0xffffff })
+    );
+    this.scene.add(line);
+
+    const click$ = Rx.Observable.fromEvent(domElement, "click");
+
     const mouseMove$ = Rx.Observable.fromEvent(domElement, "mousemove")
       .throttleTime(50)
       .map(({ clientX, clientY }) =>
@@ -60,42 +68,61 @@ export default class Scene extends React.Component<IProps> {
       passive: true
     });
 
-    const intersects$ = mouseMove$.flatMap(([x, y]) => {
-      this.raycaster.setFromCamera({ x, y }, this.camera);
-      return this.raycaster.intersectObject(this.model);
-    });
-
-    const outlineGeometry = new THREE.Geometry();
-    outlineGeometry.vertices.push(new THREE.Vector3(0, 0, 0));
-    outlineGeometry.vertices.push(new THREE.Vector3(0, 0, 0));
-    outlineGeometry.vertices.push(new THREE.Vector3(0, 0, 0));
-    outlineGeometry.vertices.push(new THREE.Vector3(0, 0, 0));
-
-    const line = new THREE.Line(
-      outlineGeometry,
-      new THREE.LineBasicMaterial({ color: 0xffffff })
-    );
-    this.scene.add(line);
+    const intersects$ = mouseMove$
+      .flatMap(([x, y]) => {
+        this.raycaster.setFromCamera({ x, y }, this.camera);
+        return this.raycaster.intersectObject(this.model);
+      })
+      .share();
 
     const activeFaces$ = intersects$
-      .map((intersect: any) => {
-        return [
-          this.model.geometry.vertices[intersect.face.a],
-          this.model.geometry.vertices[intersect.face.b],
-          this.model.geometry.vertices[intersect.face.c],
-          this.model.geometry.vertices[intersect.face.a]
-        ];
+      .map((intersection: THREE.Intersection) => {
+        return (this.model.geometry as THREE.Geometry).faces.filter(face =>
+          nearlyEqual(face.normal, intersection.face.normal)
+        );
       })
-      .distinctUntilChanged((p: THREE.Vector3[], q: THREE.Vector3[]) => {
-        return p[0].equals(q[0]) && p[1].equals(q[1]) && p[2].equals(q[2]);
+      .distinctUntilChanged((f: THREE.Face3[], q: THREE.Face3[]) => {
+        // only continue if faces are pointing in a different direction
+        return f[0].normal === q[0].normal;
+      });
+
+    const activeVertices$ = activeFaces$
+      .map((faces: THREE.Face3[]) => {
+        const vertices = flatten(
+          faces.map(f => {
+            return [
+              this.model.geometry.vertices[f.a],
+              this.model.geometry.vertices[f.b],
+              this.model.geometry.vertices[f.c]
+            ];
+          })
+        );
+        line.geometry.dispose();
+        line.geometry = new THREE.Geometry();
+        line.geometry.vertices = vertices;
+        line.geometry.mergeVertices();
+        return line.geometry.vertices;
       })
-      .map((points: THREE.Vector3[]) => {
-        outlineGeometry.vertices = points;
-        outlineGeometry.verticesNeedUpdate = true;
-      })
+      .share();
+
+    // prettier-ignore
+    activeVertices$
+      // .do(console.log)
       .subscribe(() => {
         requestAnimationFrame(this.render3D);
       });
+
+    activeVertices$.sample(click$).subscribe(vertices => {
+      console.log("EXTRUDE");
+      vertices.forEach(v => v.addScalar(0.1));
+      const geometry = this.model.geometry as THREE.Geometry;
+      geometry.verticesNeedUpdate = true;
+      geometry.computeBoundingSphere();
+      geometry.computeBoundingBox();
+      geometry.computeFlatVertexNormals();
+
+      requestAnimationFrame(this.render3D);
+    });
 
     mouseWheel$
       .throttleTime(20)
@@ -106,6 +133,6 @@ export default class Scene extends React.Component<IProps> {
   }
 
   render() {
-    return <div ref="scene" id="scene" onMouseDown={this.handleMouseDown} />;
+    return <div ref="scene" id="scene" />;
   }
 }
