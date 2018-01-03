@@ -64,7 +64,7 @@ export default class Scene extends React.Component<IProps> {
         getPosition(clientX, clientY, this.props.width, this.props.height)
       );
 
-    const mouseWheel$ = Rx.Observable.fromEvent(el, "mousewheel", {
+    const mouseWheel$ = Rx.Observable.fromEvent(el, "wheel", {
       passive: true
     });
 
@@ -144,6 +144,7 @@ export default class Scene extends React.Component<IProps> {
 
     // zoom functionality
     mouseWheel$
+      .do((we: WheelEvent) => console.log(we.wheelDelta))
       .throttleTime(20)
       // .pluck("deltaY")
       .map((e: WheelEvent) =>
