@@ -33,7 +33,7 @@ export default class Scene extends React.Component<IProps> {
   }
 
   render3D() {
-    console.log("render");
+    // console.log("render");
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -42,17 +42,20 @@ export default class Scene extends React.Component<IProps> {
     const el = this.refs.scene as HTMLDivElement;
     el.appendChild(domElement);
 
+    const plane = new THREE.Plane();
     const faceOutline = new THREE.Line(
       new THREE.Geometry(),
       new THREE.LineBasicMaterial({ color: 0xffffff })
     );
     this.scene.add(faceOutline);
+    requestAnimationFrame(this.render3D);
 
     // add event listeners
 
     const click$ = Rx.Observable.fromEvent(domElement, "click");
 
     const mouseDown$ = Rx.Observable.fromEvent(domElement, "mousedown");
+
     const mouseUp$ = Rx.Observable.fromEvent(document.body, "mouseup");
 
     const mouseMove$ = Rx.Observable.fromEvent(domElement, "mousemove")
@@ -68,95 +71,90 @@ export default class Scene extends React.Component<IProps> {
     // connect streams
 
     const intersections$ = mouseMove$
-      .flatMap(([x, y]) => {
+      .throttleTime(20)
+      .map(([x, y]) => {
         this.raycaster.setFromCamera({ x, y }, this.camera);
         return this.raycaster.intersectObject(this.model);
       })
-      .share();
+      .partition(arr => arr.length <= 0);
 
-    const plane = new THREE.Plane();
+    const offModel$ = intersections$[0].subscribe(_ => {
+      faceOutline.visible = false;
+      console.log("off");
+      requestAnimationFrame(this.render3D);
+    });
 
-    const activeFaces$ = intersections$
-      .map((intersection: THREE.Intersection) => {
-        // plane.setFromNormalAndCoplanarPoint(
-        //   intersection.face.normal,
-        //   intersection.point
-        // )
+    const overModel$ = intersections$[1].map(
+      (arr: THREE.Intersection[]) => arr[0]
+    );
 
-        return (this.model.geometry as THREE.Geometry).faces.filter(face =>
-          nearlyEqual(face.normal, intersection.face.normal)
-        );
-      })
-      .distinctUntilChanged((f: THREE.Face3[], q: THREE.Face3[]) => {
-        // only continue if faces are pointing in a different direction
-        return f[0].normal === q[0].normal;
-      });
+    const activeFaces$ = overModel$.map((intersection: THREE.Intersection) => {
+      // plane.setFromNormalAndCoplanarPoint(
+      //   intersection.face.normal,
+      //   intersection.point
+      // )
+      return (this.model.geometry as THREE.Geometry).faces.filter(face =>
+        nearlyEqual(face.normal, intersection.face.normal)
+      );
+    });
+    // .distinctUntilChanged((f: THREE.Face3[], q: THREE.Face3[]) => {
+    //   // only continue if faces are pointing in a different direction
+    //   return f[0].normal === q[0].normal;
+    // })
 
-    const activeVertices$ = activeFaces$
-      .map((faces: THREE.Face3[]) => {
-        const vertices = flatten(
-          faces.map(f => {
-            return [
-              this.model.geometry.vertices[f.a],
-              this.model.geometry.vertices[f.b],
-              this.model.geometry.vertices[f.c]
-            ];
-          })
-        );
-        faceOutline.geometry.dispose();
-        faceOutline.geometry = new THREE.Geometry();
-        faceOutline.geometry.vertices = vertices;
+    const activeVertices$ = activeFaces$.map((faces: THREE.Face3[]) => {
+      const vertices = flatten(
+        faces.map(f => {
+          return [
+            this.model.geometry.vertices[f.a],
+            this.model.geometry.vertices[f.b],
+            this.model.geometry.vertices[f.c]
+          ];
+        })
+      );
+      faceOutline.visible = true;
+      faceOutline.geometry.dispose();
+      faceOutline.geometry = new THREE.Geometry();
+      faceOutline.geometry.vertices = vertices;
 
-        faceOutline.geometry.mergeVertices();
-        return {
-          normal: faces[0].normal.clone().normalize(),
-          vertices: faceOutline.geometry.vertices
-        };
-      })
-      .share();
+      faceOutline.geometry.mergeVertices();
+      return {
+        normal: faces[0].normal.clone().normalize(),
+        vertices: faceOutline.geometry.vertices
+      };
+    });
 
     // prettier-ignore
     activeVertices$
-      // .do(console.log)
+      .do(v => { console.log('vertices') })
       .subscribe(_ => {
         // console.log('rendering')
         requestAnimationFrame(this.render3D);
       });
 
-    // activeVertices$.sample(click$).subscribe(({ normal, vertices }) => {
-    //   console.log("EXTRUDE", vertices);
-    //   vertices.forEach(v => {
-    //     console.log(v);
-    //     v.add(normal);
-    //   });
-    //   const { geometry } = this.model;
-    //   geometry.verticesNeedUpdate = true;
-    //   geometry.computeBoundingSphere();
-    //   geometry.computeBoundingBox();
-    //   geometry.computeFlatVertexNormals();
-
-    //   requestAnimationFrame(this.render3D);
-    // });
-
-    activeVertices$
-      .mergeMapTo(mouseDown$)
-      .mergeMapTo(mouseMove$)
+    mouseDown$
+      // .mergeMapTo(activeVertices$)
+      .mergeMap(vs => {
+        console.log("mouse down!");
+        return mouseMove$;
+      })
       .takeUntil(mouseUp$)
+      .repeat()
       .subscribe(console.log);
 
+    // zoom functionality
     mouseWheel$
       .throttleTime(20)
       // .pluck("deltaY")
       .map((e: WheelEvent) =>
         Math.max(Math.min(this.camera.zoom + e.deltaY / 500, 2), 0.5)
       )
+      .distinctUntilChanged()
       .subscribe((delta: number) => {
         this.camera.zoom = delta;
         this.camera.updateProjectionMatrix();
         requestAnimationFrame(this.render3D);
       });
-
-    requestAnimationFrame(this.render3D);
   }
 
   render() {
