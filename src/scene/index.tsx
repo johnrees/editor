@@ -5,6 +5,7 @@ import model from "./components/model";
 import renderer from "./components/renderer";
 import * as Rx from "rxjs/Rx";
 import { getPosition, nearlyEqual, flatten } from "./utils";
+// import extrude from "./interactions/extrude";
 
 interface IProps {
   width: number;
@@ -51,6 +52,9 @@ export default class Scene extends React.Component<IProps> {
 
     const click$ = Rx.Observable.fromEvent(domElement, "click");
 
+    const mouseDown$ = Rx.Observable.fromEvent(domElement, "mousedown");
+    const mouseUp$ = Rx.Observable.fromEvent(document.body, "mouseup");
+
     const mouseMove$ = Rx.Observable.fromEvent(domElement, "mousemove")
       .throttleTime(50)
       .map(({ clientX, clientY }) =>
@@ -70,9 +74,15 @@ export default class Scene extends React.Component<IProps> {
       })
       .share();
 
+    const plane = new THREE.Plane();
+
     const activeFaces$ = intersections$
       .map((intersection: THREE.Intersection) => {
-        // console.log(intersection.point);
+        // plane.setFromNormalAndCoplanarPoint(
+        //   intersection.face.normal,
+        //   intersection.point
+        // )
+
         return (this.model.geometry as THREE.Geometry).faces.filter(face =>
           nearlyEqual(face.normal, intersection.face.normal)
         );
@@ -96,6 +106,7 @@ export default class Scene extends React.Component<IProps> {
         faceOutline.geometry.dispose();
         faceOutline.geometry = new THREE.Geometry();
         faceOutline.geometry.vertices = vertices;
+
         faceOutline.geometry.mergeVertices();
         return {
           normal: faces[0].normal.clone().normalize(),
@@ -108,29 +119,42 @@ export default class Scene extends React.Component<IProps> {
     activeVertices$
       // .do(console.log)
       .subscribe(_ => {
-        console.log('rendering')
+        // console.log('rendering')
         requestAnimationFrame(this.render3D);
       });
 
-    activeVertices$.sample(click$).subscribe(({ normal, vertices }) => {
-      console.log("EXTRUDE", vertices);
-      vertices.forEach(v => {
-        console.log(v);
-        v.add(normal);
-      });
-      const { geometry } = this.model;
-      geometry.verticesNeedUpdate = true;
-      geometry.computeBoundingSphere();
-      geometry.computeBoundingBox();
-      geometry.computeFlatVertexNormals();
+    // activeVertices$.sample(click$).subscribe(({ normal, vertices }) => {
+    //   console.log("EXTRUDE", vertices);
+    //   vertices.forEach(v => {
+    //     console.log(v);
+    //     v.add(normal);
+    //   });
+    //   const { geometry } = this.model;
+    //   geometry.verticesNeedUpdate = true;
+    //   geometry.computeBoundingSphere();
+    //   geometry.computeBoundingBox();
+    //   geometry.computeFlatVertexNormals();
 
-      requestAnimationFrame(this.render3D);
-    });
+    //   requestAnimationFrame(this.render3D);
+    // });
+
+    activeVertices$
+      .mergeMapTo(mouseDown$)
+      .mergeMapTo(mouseMove$)
+      .takeUntil(mouseUp$)
+      .subscribe(console.log);
 
     mouseWheel$
       .throttleTime(20)
-      .pluck("deltaY")
-      .subscribe(console.log);
+      // .pluck("deltaY")
+      .map((e: WheelEvent) =>
+        Math.max(Math.min(this.camera.zoom + e.deltaY / 500, 2), 0.5)
+      )
+      .subscribe((delta: number) => {
+        this.camera.zoom = delta;
+        this.camera.updateProjectionMatrix();
+        requestAnimationFrame(this.render3D);
+      });
 
     requestAnimationFrame(this.render3D);
   }
