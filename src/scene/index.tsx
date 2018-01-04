@@ -5,7 +5,8 @@ import model from "./components/model";
 import renderer from "./components/renderer";
 import * as Rx from "rxjs/Rx";
 import { getPosition, nearlyEqual, flatten } from "./utils";
-// import extrude from "./interactions/extrude";
+import zoom from "./interactions/zoom";
+import { facesHash } from "@bentobots/three";
 
 interface IProps {
   width: number;
@@ -28,13 +29,6 @@ export default class Scene extends React.Component<IProps> {
     this.model = model([[-2, 0], [-2, 2.5], [0, 3.6], [2, 2.5], [2, 0]]);
 
     this.scene.add(this.model);
-
-    this.render3D = this.render3D.bind(this);
-  }
-
-  render3D() {
-    // console.log("render");
-    this.renderer.render(this.scene, this.camera);
   }
 
   componentDidMount() {
@@ -48,9 +42,10 @@ export default class Scene extends React.Component<IProps> {
       new THREE.LineBasicMaterial({ color: 0xffffff })
     );
     this.scene.add(faceOutline);
-    requestAnimationFrame(this.render3D);
 
-    // add event listeners
+    /**
+     * Attach event listeners
+     */
 
     const click$ = Rx.Observable.fromEvent(domElement, "click");
 
@@ -64,11 +59,19 @@ export default class Scene extends React.Component<IProps> {
         getPosition(clientX, clientY, this.props.width, this.props.height)
       );
 
-    const mouseWheel$ = Rx.Observable.fromEvent(el, "wheel", {
+    const wheel$ = Rx.Observable.fromEvent(el, "wheel", {
       passive: true
     });
 
-    // connect streams
+    /**
+     * Make streams
+     */
+
+    // zooming
+
+    const zoom$ = zoom(wheel$, this.camera);
+
+    // mouseover
 
     const intersections$ = mouseMove$
       .throttleTime(20)
@@ -76,31 +79,43 @@ export default class Scene extends React.Component<IProps> {
         this.raycaster.setFromCamera({ x, y }, this.camera);
         return this.raycaster.intersectObject(this.model);
       })
+      .startWith([])
       .partition(arr => arr.length <= 0);
 
-    const offModel$ = intersections$[0].subscribe(_ => {
-      faceOutline.visible = false;
-      console.log("off");
-      requestAnimationFrame(this.render3D);
-    });
+    const offModel$ = intersections$[0]
+      .do(_ => {
+        // console.log('off')
+        faceOutline.visible = false;
+      })
+      .map(() => false);
 
-    const overModel$ = intersections$[1].map(
-      (arr: THREE.Intersection[]) => arr[0]
-    );
+    const overModel$ = intersections$[1]
+      .do(_ => {
+        // console.log('on')
+        faceOutline.visible = true;
+      })
+      .map(arr => arr[0]);
 
-    const activeFaces$ = overModel$.map((intersection: THREE.Intersection) => {
-      // plane.setFromNormalAndCoplanarPoint(
-      //   intersection.face.normal,
-      //   intersection.point
-      // )
-      return (this.model.geometry as THREE.Geometry).faces.filter(face =>
-        nearlyEqual(face.normal, intersection.face.normal)
-      );
-    });
-    // .distinctUntilChanged((f: THREE.Face3[], q: THREE.Face3[]) => {
-    //   // only continue if faces are pointing in a different direction
-    //   return f[0].normal === q[0].normal;
-    // })
+    const hoverState$ = Rx.Observable.merge(
+      offModel$,
+      overModel$
+    ).distinctUntilChanged();
+
+    const activeFaces$ = hoverState$
+      .map((intersection: THREE.Intersection) => {
+        if (intersection) {
+          // plane.setFromNormalAndCoplanarPoint(
+          //   intersection.face.normal,
+          //   intersection.point
+          // )
+          return (this.model.geometry as THREE.Geometry).faces.filter(face =>
+            nearlyEqual(face.normal, intersection.face.normal)
+          );
+        } else {
+          return [];
+        }
+      })
+      .distinctUntilChanged((x, y) => facesHash(x) === facesHash(y));
 
     const activeVertices$ = activeFaces$.map((faces: THREE.Face3[]) => {
       const vertices = flatten(
@@ -119,42 +134,18 @@ export default class Scene extends React.Component<IProps> {
 
       faceOutline.geometry.mergeVertices();
       return {
-        normal: faces[0].normal.clone().normalize(),
+        // normal: faces[0].normal.clone().normalize(),
         vertices: faceOutline.geometry.vertices
       };
     });
 
-    // prettier-ignore
-    activeVertices$
-      .do(v => { console.log('vertices') })
-      .subscribe(_ => {
-        // console.log('rendering')
-        requestAnimationFrame(this.render3D);
-      });
-
-    mouseDown$
-      // .mergeMapTo(activeVertices$)
-      .mergeMap(vs => {
-        console.log("mouse down!");
-        return mouseMove$;
-      })
-      .takeUntil(mouseUp$)
-      .repeat()
-      .subscribe(console.log);
-
-    // zoom functionality
-    mouseWheel$
-      .do((we: WheelEvent) => console.log(we.wheelDelta))
+    const render$ = Rx.Observable.merge(activeVertices$, zoom$)
       .throttleTime(20)
-      // .pluck("deltaY")
-      .map((e: WheelEvent) =>
-        Math.max(Math.min(this.camera.zoom + e.deltaY / 500, 2), 0.5)
-      )
-      .distinctUntilChanged()
-      .subscribe((delta: number) => {
-        this.camera.zoom = delta;
-        this.camera.updateProjectionMatrix();
-        requestAnimationFrame(this.render3D);
+      .subscribe(_ => {
+        console.log(_, "rendering");
+        requestAnimationFrame(() =>
+          this.renderer.render(this.scene, this.camera)
+        );
       });
   }
 
