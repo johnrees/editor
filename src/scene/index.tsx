@@ -117,27 +117,41 @@ export default class Scene extends React.Component<IProps> {
       })
       .distinctUntilChanged((x, y) => facesHash(x) === facesHash(y));
 
-    const activeVertices$ = activeFaces$.map((faces: THREE.Face3[]) => {
-      const vertices = flatten(
-        faces.map(f => {
-          return [
-            this.model.geometry.vertices[f.a],
-            this.model.geometry.vertices[f.b],
-            this.model.geometry.vertices[f.c]
-          ];
-        })
-      );
-      faceOutline.visible = true;
-      faceOutline.geometry.dispose();
-      faceOutline.geometry = new THREE.Geometry();
-      faceOutline.geometry.vertices = vertices;
+    const activeVertices$ = activeFaces$
+      .map((faces: THREE.Face3[]) => {
+        const vertices = flatten(
+          faces.map(f => {
+            return [
+              this.model.geometry.vertices[f.a],
+              this.model.geometry.vertices[f.b],
+              this.model.geometry.vertices[f.c]
+            ];
+          })
+        );
+        faceOutline.visible = true;
+        faceOutline.geometry.dispose();
+        faceOutline.geometry = new THREE.Geometry();
+        faceOutline.geometry.vertices = vertices;
 
-      faceOutline.geometry.mergeVertices();
-      return {
-        // normal: faces[0].normal.clone().normalize(),
-        vertices: faceOutline.geometry.vertices
-      };
-    });
+        faceOutline.geometry.mergeVertices();
+        return {
+          // normal: faces[0].normal.clone().normalize(),
+          vertices: faceOutline.geometry.vertices
+        };
+      })
+      .share();
+
+    activeVertices$
+      .filter(v => v.vertices.length > 0)
+      .concatMap(sm => {
+        return mouseDown$.switchMap(vs => {
+          console.log("mouse down!");
+          return mouseMove$;
+        });
+      })
+      .takeUntil(mouseUp$)
+      .repeat()
+      .subscribe(console.log);
 
     const render$ = Rx.Observable.merge(activeVertices$, zoom$)
       .throttleTime(20)
