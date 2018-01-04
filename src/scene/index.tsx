@@ -7,6 +7,7 @@ import * as Rx from "rxjs/Rx";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 import zoom from "./interactions/zoom";
 import { facesHash } from "@bentobots/three";
+import DebugPlane from "./components/debug_plane";
 
 interface IProps {
   width: number;
@@ -108,19 +109,31 @@ export default class Scene extends React.Component<IProps> {
           //   intersection.face.normal,
           //   intersection.point
           // )
-          return (this.model.geometry as THREE.Geometry).faces.filter(face =>
-            nearlyEqual(face.normal, intersection.face.normal)
+          const faces = (this.model.geometry as THREE.Geometry).faces.filter(
+            face => nearlyEqual(face.normal, intersection.face.normal)
           );
+          return {
+            intersection,
+            normal: faces[0].normal.clone().normalize(),
+            faces
+          };
         } else {
-          return [];
+          return {
+            intersection,
+            normal: new THREE.Vector3(),
+            faces: []
+          };
         }
       })
-      .distinctUntilChanged((x, y) => facesHash(x) === facesHash(y));
+      .distinctUntilChanged(
+        (x, y) => facesHash(x.faces) === facesHash(y.faces)
+      );
 
     const activeVertices$ = activeFaces$
-      .map((faces: THREE.Face3[]) => {
+      .map(ob => {
+        const { intersection, faces, normal } = ob;
         const vertices = flatten(
-          faces.map(f => {
+          (faces as THREE.Face3[]).map(f => {
             return [
               this.model.geometry.vertices[f.a],
               this.model.geometry.vertices[f.b],
@@ -135,25 +148,46 @@ export default class Scene extends React.Component<IProps> {
 
         faceOutline.geometry.mergeVertices();
         return {
-          // normal: faces[0].normal.clone().normalize(),
+          intersection,
+          normal,
           vertices: faceOutline.geometry.vertices
         };
       })
       .share();
 
-    activeVertices$
+    const debugPlane = DebugPlane(false);
+    this.scene.add(debugPlane);
+
+    // extruding
+
+    const extrude$ = activeVertices$
+      // if mouse is over a face
       .filter(v => v.vertices.length > 0)
-      .concatMap(sm => {
+      .concatMap(v => {
+        // when mouse is down and moving
         return mouseDown$.switchMap(vs => {
-          console.log("mouse down!");
+          console.log("mouse down!", v);
+
+          v.vertices.forEach(vert => {
+            vert.addScaledVector(v.normal, 1);
+          });
+
+          const geometry = (v.intersection.object as THREE.Mesh)
+            .geometry as THREE.Geometry;
+          geometry.verticesNeedUpdate = true;
+          geometry.computeBoundingSphere();
+
           return mouseMove$;
         });
       })
+      // until the mouse button is lifted
       .takeUntil(mouseUp$)
-      .repeat()
-      .subscribe(console.log);
+      // repeat so it can be run again
+      .repeat();
 
-    const render$ = Rx.Observable.merge(activeVertices$, zoom$)
+    // render stream
+
+    const render$ = Rx.Observable.merge(activeVertices$, zoom$, extrude$)
       .throttleTime(20)
       .subscribe(_ => {
         console.log(_, "rendering");
