@@ -2,7 +2,6 @@ import * as THREE from "three";
 import * as React from "react";
 import * as Rx from "rxjs/Rx";
 import camera from "./components/camera";
-import DebugPlane from "./components/debug_plane";
 import model from "./components/model";
 import renderer from "./components/renderer";
 import zoom from "./interactions/zoom";
@@ -74,12 +73,12 @@ export default class Scene extends React.PureComponent<IProps> {
       .startWith([])
       .share()
 
-    const over$ = intersections$
+    const mouseOverModel$ = intersections$
       .filter(intersections => intersections.length > 0)
       .map(intersections => intersections[0])
       .share()
 
-    const activeFaces$ = over$
+    const activeModelFaces$ = mouseOverModel$
       .map(intersection => {
         const {object, face} = intersection;
         if (object instanceof THREE.Mesh) {
@@ -94,8 +93,8 @@ export default class Scene extends React.PureComponent<IProps> {
         (x, y) => facesHash(x) === facesHash(y)
       )
 
-    const activeVertices$ = over$
-      .withLatestFrom(activeFaces$)
+    const activeModelVertices$ = mouseOverModel$
+      .withLatestFrom(activeModelFaces$)
       .map(([intersection, faces]) => {
         const object = intersection.object as THREE.Mesh;
         const geometry = object.geometry as THREE.Geometry;
@@ -147,7 +146,7 @@ export default class Scene extends React.PureComponent<IProps> {
     const extrude$ = mouseDown$
       .withLatestFrom(intersections$)
       .filter(([_, intersections]) => intersections.length > 0)
-      .withLatestFrom(activeVertices$)
+      .withLatestFrom(activeModelVertices$)
       .switchMap(setPlaneAndOriginalVertices)
       .switchMap(extrudeVertices)
       .takeUntil(mouseUp$)
@@ -161,8 +160,6 @@ export default class Scene extends React.PureComponent<IProps> {
           this.renderer.render(this.scene, this.camera)
         );
       });
-
-    this.renderer.render(this.scene, this.camera)
   }
 
   render() {
