@@ -8,10 +8,9 @@ import renderer from "./components/renderer";
 import zoom from "./interactions/zoom";
 import isEqual from "lodash/isEqual";
 import { facesHash } from "@bentobots/three";
-import { extrude } from "./interactions/extrude";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 
-const RENDER_THROTTLE = 30;
+const RENDER_THROTTLE = 20;
 
 interface IProps {
   width: number;
@@ -42,6 +41,7 @@ export default class Scene extends React.PureComponent<IProps> {
     el.appendChild(domElement);
 
     const plane = new THREE.Plane();
+    const planeIntersection = new THREE.Vector3();
     const faceOutline = new THREE.Line(
       new THREE.Geometry(),
       new THREE.LineBasicMaterial({ color: 0xffffff })
@@ -55,7 +55,7 @@ export default class Scene extends React.PureComponent<IProps> {
     const mouseUp$ = Rx.Observable.fromEvent(document.body, "mouseup");
 
     const mouseMove$ = Rx.Observable.fromEvent(domElement, "mousemove")
-      .throttleTime(50)
+      .throttleTime(30)
       .map(({ clientX, clientY }) =>
         getPosition(clientX, clientY, this.props.width, this.props.height)
       );
@@ -67,7 +67,6 @@ export default class Scene extends React.PureComponent<IProps> {
     const zoom$ = zoom(wheel$, this.camera);
 
     const intersections$ = mouseMove$
-      .throttleTime(20)
       .map(([x, y]) => {
         this.raycaster.setFromCamera({ x, y }, this.camera);
         return this.raycaster.intersectObject(this.model);
@@ -100,7 +99,7 @@ export default class Scene extends React.PureComponent<IProps> {
       .map(([intersection, faces]) => {
         const object = intersection.object as THREE.Mesh;
         const geometry = object.geometry as THREE.Geometry;
-        return new Set(flatten(
+        return [...new Set(flatten(
           faces.map(f => {
             return [
               geometry.vertices[f.a],
@@ -108,19 +107,63 @@ export default class Scene extends React.PureComponent<IProps> {
               geometry.vertices[f.c]
             ];
           })
-        ))
+        ))]
       })
       .distinctUntilChanged(isEqual)
+
+    function setPlaneAndOriginalVertices([[mousedown, intersections], vertices]) {
+      const intersection = intersections[0]
+      plane.setFromCoplanarPoints(
+        intersection.point,
+        intersection.point.clone()
+                          .add(intersection.face.normal),
+        intersection.point.clone()
+          .add(new THREE.Vector3(0,1,0))
+      )
+      return mouseMove$.withLatestFrom(
+        Rx.Observable.of({
+          intersection,
+          vertices,
+          origVertices: vertices.map( (v:THREE.Vector3) => v.clone())
+        })
+      )
+    }
+
+    function extrudeVertices([mousePosition, {intersection, vertices, origVertices}]) {
+      if (
+        (
+          intersection.object instanceof THREE.Mesh &&
+          intersection.object.geometry instanceof THREE.Geometry
+        ) && (
+          this.raycaster.ray.intersectPlane(
+            plane,
+            planeIntersection
+          )
+        )
+      ) {
+        const toAdd = new THREE.Vector3().multiplyVectors(
+          intersection.face.normal,
+          planeIntersection.clone().sub(intersection.point)
+        );
+        vertices.forEach((vert:THREE.Vector3, index) => {
+          vert.copy(origVertices[index].clone().add(toAdd));
+        });
+        intersection.object.geometry.verticesNeedUpdate = true;
+        intersection.object.geometry.computeBoundingSphere();
+        return Rx.Observable.of(1)
+      }
+    }
 
     const extrude$ = mouseDown$
       .withLatestFrom(intersections$)
       .filter(([_, intersections]) => intersections.length > 0)
       .withLatestFrom(activeVertices$)
-      .switchMap(extrude(mouseMove$))
+      .switchMap(setPlaneAndOriginalVertices)
+      .switchMap(extrudeVertices.bind(this))
       .takeUntil(mouseUp$)
       .repeat()
 
-    const render$ = extrude$
+    const render$ = Rx.Observable.merge(extrude$, zoom$)
       .throttleTime(RENDER_THROTTLE)
       .subscribe(_ => {
         console.log(_);
