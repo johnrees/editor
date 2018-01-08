@@ -10,7 +10,7 @@ import isEqual from "lodash/isEqual";
 import { facesHash } from "@bentobots/three";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 
-const RENDER_THROTTLE = 20;
+const RENDER_THROTTLE = 25;
 
 interface IProps {
   width: number;
@@ -22,7 +22,6 @@ export default class Scene extends React.PureComponent<IProps> {
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
   private model;
-  private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private scene: THREE.Scene = new THREE.Scene();
 
   constructor(props) {
@@ -40,6 +39,7 @@ export default class Scene extends React.PureComponent<IProps> {
     const el = this.refs.scene as HTMLDivElement;
     el.appendChild(domElement);
 
+    const raycaster: THREE.Raycaster = new THREE.Raycaster();
     const plane = new THREE.Plane();
     const planeIntersection = new THREE.Vector3();
     const faceOutline = new THREE.Line(
@@ -68,8 +68,8 @@ export default class Scene extends React.PureComponent<IProps> {
 
     const intersections$ = mouseMove$
       .map(([x, y]) => {
-        this.raycaster.setFromCamera({ x, y }, this.camera);
-        return this.raycaster.intersectObject(this.model);
+        raycaster.setFromCamera({ x, y }, this.camera);
+        return raycaster.intersectObject(this.model);
       })
       .startWith([])
       .share()
@@ -130,17 +130,7 @@ export default class Scene extends React.PureComponent<IProps> {
     }
 
     function extrudeVertices([mousePosition, {intersection, vertices, origVertices}]) {
-      if (
-        (
-          intersection.object instanceof THREE.Mesh &&
-          intersection.object.geometry instanceof THREE.Geometry
-        ) && (
-          this.raycaster.ray.intersectPlane(
-            plane,
-            planeIntersection
-          )
-        )
-      ) {
+      if (raycaster.ray.intersectPlane(plane,planeIntersection)) {
         const toAdd = new THREE.Vector3().multiplyVectors(
           intersection.face.normal,
           planeIntersection.clone().sub(intersection.point)
@@ -159,7 +149,7 @@ export default class Scene extends React.PureComponent<IProps> {
       .filter(([_, intersections]) => intersections.length > 0)
       .withLatestFrom(activeVertices$)
       .switchMap(setPlaneAndOriginalVertices)
-      .switchMap(extrudeVertices.bind(this))
+      .switchMap(extrudeVertices)
       .takeUntil(mouseUp$)
       .repeat()
 
