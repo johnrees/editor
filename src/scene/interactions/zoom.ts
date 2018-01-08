@@ -5,7 +5,7 @@ export default function zoom(wheel$, camera) {
       .throttleTime(20)
       // .pluck("deltaY")
       .map((e: WheelEvent) =>
-        Math.max(Math.min(camera.zoom + e.deltaY / 500, 2), 0.5)
+        Math.max(Math.min(camera.zoom + e.deltaY / 100, 2), 0.5)
       )
       .startWith(camera.zoom)
       .distinctUntilChanged()
