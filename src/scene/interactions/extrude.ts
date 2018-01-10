@@ -1,15 +1,20 @@
 import * as THREE from "three";
 import * as Rx from "rxjs";
 
-export const setPlaneAndOriginalVertices = (plane, mouseMove$) => ([[mousedown, intersections], vertices]) => {
+export const setPlaneAndOriginalVertices = (plane, mouseMove$, faceOutline) => ([[_, intersections], vertices]) => {
   const intersection = intersections[0]
-  plane.setFromCoplanarPoints(
+  const planePoints = [
     intersection.point,
-    intersection.point.clone()
-                      .add(intersection.face.normal),
-    intersection.point.clone()
-      .add(new THREE.Vector3(0,1,0))
-  )
+    new THREE.Vector3().add(intersection.point).add(intersection.face.normal),
+    new THREE.Vector3().add(intersection.point).add(new THREE.Vector3(0,1,0))
+  ]
+  plane.setFromCoplanarPoints(...planePoints)
+  faceOutline.geometry.dispose()
+  const planeGeometry = new THREE.Geometry();
+  planeGeometry.vertices = planePoints;
+  planeGeometry.faces.push(new THREE.Face3(0,1,2));
+  plane.geometry = planeGeometry;
+
   return mouseMove$.withLatestFrom(
     Rx.Observable.of({
       intersection,
@@ -19,7 +24,7 @@ export const setPlaneAndOriginalVertices = (plane, mouseMove$) => ([[mousedown, 
   )
 }
 
-export const extrudeVertices = (raycaster, plane, planeIntersection) => ([mousePosition, {intersection, vertices, origVertices}]) => {
+export const extrudeVertices = (raycaster, plane, planeIntersection) => ([_, {intersection, vertices, origVertices}]) => {
   if (raycaster.ray.intersectPlane(plane,planeIntersection)) {
     const toAdd = new THREE.Vector3().multiplyVectors(
       intersection.face.normal,

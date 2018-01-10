@@ -42,13 +42,17 @@ export default class Scene extends React.PureComponent<IProps> {
     const raycaster: THREE.Raycaster = new THREE.Raycaster();
     const plane = new THREE.Plane();
     const planeIntersection = new THREE.Vector3();
-    const faceOutline = new THREE.Line(
+    // const faceOutline = new THREE.Line(
+    //   new THREE.Geometry(),
+    //   new THREE.LineBasicMaterial({ color: 0xffffff })
+    // );
+    const faceOutline = new THREE.Mesh(
       new THREE.Geometry(),
-      new THREE.LineBasicMaterial({ color: 0xffffff })
-    );
+      new THREE.MeshBasicMaterial({color: 0xFFFFFF, side: THREE.DoubleSide})
+    )
     this.scene.add(faceOutline);
 
-    const click$ = Rx.Observable.fromEvent(domElement, "click");
+    // const click$ = Rx.Observable.fromEvent(domElement, "click");
 
     const mouseDown$ = Rx.Observable.fromEvent(domElement, "mousedown");
 
@@ -115,13 +119,15 @@ export default class Scene extends React.PureComponent<IProps> {
       .withLatestFrom(intersections$)
       .filter(([_, intersections]) => intersections.length > 0)
       .withLatestFrom(activeModelVertices$)
-      .switchMap(setPlaneAndOriginalVertices(plane, mouseMove$))
+      .switchMap(setPlaneAndOriginalVertices(plane, mouseMove$, faceOutline))
       .switchMap(extrudeVertices(raycaster, plane, planeIntersection))
       .takeUntil(mouseUp$)
       .repeat()
 
     const render$ = Rx.Observable.merge(extrude$, zoom$)
       .throttleTime(RENDER_THROTTLE)
+
+    render$
       .subscribe(_ => {
         console.log(_);
         requestAnimationFrame(() =>
