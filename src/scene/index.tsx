@@ -9,11 +9,16 @@ import isEqual from "lodash/isEqual";
 import { facesHash } from "@bentobots/three";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 import { extrudeVertices, setPlaneAndOriginalVertices } from "./interactions/extrude";
+// import RoofLight from "./components/windows/roof_light";
 // import DebugPlane from "./components/debug_plane";
 
 const RENDER_THROTTLE = 25;
 
+// const roofLight = RoofLight();
 // const debugPlane = DebugPlane();
+const pGeometry = new THREE.PlaneGeometry( 5, 20, 32 );
+const pMaterial = new THREE.MeshBasicMaterial( {color: 0xffffff, side: THREE.DoubleSide} );
+const pPlane = new THREE.Mesh(pGeometry, pMaterial);
 
 interface IProps {
   width: number;
@@ -34,7 +39,9 @@ export default class Scene extends React.PureComponent<IProps> {
     this.renderer = renderer(width, height, bgColor);
     this.model = model([[-2, 0], [-2, 2.5], [0, 3.6], [2, 2.5], [2, 0]]);
 
+    // this.scene.add(roofLight);
     this.scene.add(this.model);
+    this.scene.add(pPlane);
     // this.scene.add(debugPlane)
   }
 
@@ -123,7 +130,7 @@ export default class Scene extends React.PureComponent<IProps> {
       .withLatestFrom(intersections$)
       .filter(([_, intersections]) => intersections.length > 0)
       .withLatestFrom(activeModelVertices$)
-      .switchMap(setPlaneAndOriginalVertices(plane, mouseMove$, faceOutline))
+      .switchMap(setPlaneAndOriginalVertices(pGeometry, pPlane, plane, mouseMove$, faceOutline))
       .switchMap(extrudeVertices(raycaster, plane, planeIntersection))
       .takeUntil(mouseUp$)
       .repeat()

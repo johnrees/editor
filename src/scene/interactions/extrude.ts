@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import * as Rx from "rxjs";
 
-export const setPlaneAndOriginalVertices = (plane, mouseMove$, faceOutline) => ([[_, intersections], vertices]) => {
+export const setPlaneAndOriginalVertices = (_pGeometry, _pPlane, plane, mouseMove$, faceOutline) => ([[_, intersections], vertices]) => {
   const intersection = intersections[0]
 
   // debugPlane.position.copy(intersection.point);
@@ -24,6 +24,13 @@ export const setPlaneAndOriginalVertices = (plane, mouseMove$, faceOutline) => (
   planeGeometry.vertices = planePoints;
   planeGeometry.faces.push(new THREE.Face3(0,1,2));
   plane.geometry = planeGeometry;
+
+  // pPlane.geometry.dispose();
+  // const { coplanarPoint } = plane;
+  // var focalPoint = new THREE.Vector3().copy(coplanarPoint).add(plane.normal);
+  // pGeometry.lookAt(focalPoint);
+  // pGeometry.translate(intersection.point.x, intersection.point.y, intersection.point.z);
+  // pPlane.geometry = pGeometry;
 
   return mouseMove$.withLatestFrom(
     Rx.Observable.of({
