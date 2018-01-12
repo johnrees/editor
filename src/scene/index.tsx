@@ -9,8 +9,11 @@ import isEqual from "lodash/isEqual";
 import { facesHash } from "@bentobots/three";
 import { getPosition, nearlyEqual, flatten } from "./utils";
 import { extrudeVertices, setPlaneAndOriginalVertices } from "./interactions/extrude";
+// import DebugPlane from "./components/debug_plane";
 
 const RENDER_THROTTLE = 25;
+
+// const debugPlane = DebugPlane();
 
 interface IProps {
   width: number;
@@ -32,6 +35,7 @@ export default class Scene extends React.PureComponent<IProps> {
     this.model = model([[-2, 0], [-2, 2.5], [0, 3.6], [2, 2.5], [2, 0]]);
 
     this.scene.add(this.model);
+    // this.scene.add(debugPlane)
   }
 
   componentDidMount() {
